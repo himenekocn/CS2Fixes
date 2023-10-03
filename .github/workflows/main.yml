@@ -92,7 +92,7 @@ jobs:
         shell: bash
         run: |
           cd project && mkdir build && cd build
-          python ../configure.py --enable-optimize --plugin-name=CS2Fixes --plugin-alias=CS2Fixes --sdks=cs2 --targets=x86_64
+          python ../configure.py -s cs2
           ambuild
 
       - name: Upload artifact
