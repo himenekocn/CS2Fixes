@@ -28,10 +28,12 @@
 #include "plat.h"
 #include "entitysystem.h"
 #include "engine/igameeventsystem.h"
-
-#include "tier0/memdbgon.h"
 #include "ctimer.h"
 #include "playermanager.h"
+#include <entity.h>
+#include "adminsystem.h"
+
+#include "tier0/memdbgon.h"
 
 CEntitySystem* g_pEntitySystem = nullptr;
 
@@ -98,7 +100,7 @@ CGlobalVars *GetGameGlobals()
 	if (!server)
 		return nullptr;
 
-	return g_pNetworkServerService->GetIGameServer()->GetGlobals();
+	return server->GetGlobals();
 }
 
 #if 0
@@ -106,22 +108,12 @@ CGlobalVars *GetGameGlobals()
 ConVar sample_cvar("sample_cvar", "42", 0);
 #endif
 
-CON_COMMAND_F(sample_command, "Sample command", FCVAR_SPONLY)
+CON_COMMAND_F(sample_command, "Sample command", FCVAR_SPONLY | FCVAR_LINKED_CONCOMMAND)
 {
 	META_CONPRINTF( "Sample command called by %d. Command: %s\n", context.GetPlayerSlot(), args.GetCommandString() );
 }
 
-CON_COMMAND_F(unlock_cvars, "Unlock all cvars", FCVAR_SPONLY)
-{
-	UnlockConVars();
-}
-
-CON_COMMAND_F(unlock_commands, "Unlock all commands", FCVAR_SPONLY)
-{
-	UnlockConCommands();
-}
-
-CON_COMMAND_F(toggle_logs, "Toggle printing most logs and warnings", FCVAR_SPONLY)
+CON_COMMAND_F(toggle_logs, "Toggle printing most logs and warnings", FCVAR_SPONLY | FCVAR_LINKED_CONCOMMAND)
 {
 	ToggleLogs();
 }
@@ -144,9 +136,11 @@ bool CS2Fixes::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 	GET_V_IFACE_ANY(GetServerFactory, g_pSource2GameClients, IServerGameClients, SOURCE2GAMECLIENTS_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetEngineFactory, g_pNetworkServerService, INetworkServerService, NETWORKSERVERSERVICE_INTERFACE_VERSION);
 	GET_V_IFACE_ANY(GetEngineFactory, g_gameEventSystem, IGameEventSystem, GAMEEVENTSYSTEM_INTERFACE_VERSION);
+	GET_V_IFACE_ANY(GetFileSystemFactory, g_pFullFileSystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 
 	// Currently doesn't work from within mm side, use GetGameGlobals() in the mean time instead
-	// gpGlobals = ismm->GetCGlobals();
+	// this needs to run in case of a late load
+	gpGlobals = GetGameGlobals();
 
 	META_CONPRINTF( "Starting plugin.\n" );
 
@@ -166,13 +160,19 @@ bool CS2Fixes::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 	addresses::Initialize();
 	interfaces::Initialize();
 
+	UnlockConVars();
+	UnlockConCommands();
+
+	g_pEntitySystem = interfaces::pGameResourceServiceServer->GetGameEntitySystem();
+
 	ConVar_Register(FCVAR_RELEASE | FCVAR_CLIENT_CAN_EXECUTE | FCVAR_GAMEDLL);
 
 	InitPatches();
 	InitDetours();
 
 	g_playerManager = new CPlayerManager();
-	
+	g_pAdminSystem = new CAdminSystem();
+
 	// Steam authentication
 	new CTimer(1.0, true, true, []() {
 		g_playerManager->TryAuthenticate();
@@ -198,11 +198,16 @@ bool CS2Fixes::Unload(char *error, size_t maxlen)
 	SH_REMOVE_HOOK_MEMFUNC(IGameEventSystem, PostEventAbstract, g_gameEventSystem, this, &CS2Fixes::Hook_PostEvent, false);
 	SH_REMOVE_HOOK_MEMFUNC(INetworkServerService, StartupServer, g_pNetworkServerService, this, &CS2Fixes::Hook_StartupServer, true);
 
+	ConVar_Unregister();
+
 	g_CommandList.Purge();
 
 	FlushAllDetours();
 	UndoPatches();
 	RemoveTimers();
+
+	delete g_playerManager;
+	delete g_pAdminSystem;
 
 	return true;
 }
@@ -235,33 +240,21 @@ void CS2Fixes::Hook_PostEvent(CSplitScreenSlot nSlot, bool bLocalOnly, int nClie
 	if (info->m_MessageId == GE_FireBulletsId)
 	{
 		// Can later do a bit mask for players using stopsound but this will do for now
-		for (uint64 i = 0; i < 64; i++)
+		for (uint64 i = 0; i < MAXPLAYERS; i++)
 		{
 			ZEPlayer *pPlayer = g_playerManager->GetPlayer(i);
+
+			// A client might be already excluded from the event possibly due to being too far away, so ignore them
+			if (!(*(uint64 *)clients & ((uint64)1 << i)))
+				continue;
 
 			if (pPlayer && pPlayer->IsUsingStopSound())
 			{
 				*(uint64*)clients &= ~((uint64)1 << i);
 				nClientCount--;
-				//Message("Blocking fire bullets for %d\n", i);
 			}
 		}
 	}
-
-	if (info->m_MessageId != UM_ServerFrameTime)
-	{
-		CUtlString str;
-		info->m_pBinding->ToString(pData, str);
-
-		//Message("%s\n", str.Get());
-	}
-
-	if (info->m_MessageId == CS_UM_SayText2 || info->m_MessageId == UM_SayText2)
-	{
-		auto test = (CUserMessageSayText2*)pData;
-		//Message("Message Name: %s\n", test->messagename().c_str());
-	}
-	
 }
 
 void CS2Fixes::AllPluginsLoaded()
@@ -273,7 +266,7 @@ void CS2Fixes::AllPluginsLoaded()
 
 void CS2Fixes::Hook_ClientActive( CPlayerSlot slot, bool bLoadGame, const char *pszName, uint64 xuid )
 {
-	META_CONPRINTF( "Hook_ClientActive(%d, %d, \"%s\", %d)\n", slot, bLoadGame, pszName, xuid );
+	META_CONPRINTF( "Hook_ClientActive(%d, %d, \"%s\", %lli)\n", slot, bLoadGame, pszName, xuid );
 }
 
 void CS2Fixes::Hook_ClientCommand( CPlayerSlot slot, const CCommand &args )
@@ -288,25 +281,29 @@ void CS2Fixes::Hook_ClientSettingsChanged( CPlayerSlot slot )
 
 void CS2Fixes::Hook_OnClientConnected( CPlayerSlot slot, const char *pszName, uint64 xuid, const char *pszNetworkID, const char *pszAddress, bool bFakePlayer )
 {
-	META_CONPRINTF( "Hook_OnClientConnected(%d, \"%s\", %d, \"%s\", \"%s\", %d)\n", slot, pszName, xuid, pszNetworkID, pszAddress, bFakePlayer );
+	if(bFakePlayer)
+		g_playerManager->OnBotConnected(slot);
+
+	META_CONPRINTF( "Hook_OnClientConnected(%d, \"%s\", %lli, \"%s\", \"%s\", %d)\n", slot, pszName, xuid, pszNetworkID, pszAddress, bFakePlayer );
 }
 
 bool CS2Fixes::Hook_ClientConnect( CPlayerSlot slot, const char *pszName, uint64 xuid, const char *pszNetworkID, bool unk1, CBufferString *pRejectReason )
 {
 	g_playerManager->OnClientConnected(slot);
-	META_CONPRINTF( "Hook_ClientConnect(%d, \"%s\", %d, \"%s\", %d, \"%s\")\n", slot, pszName, xuid, pszNetworkID, unk1, pRejectReason->ToGrowable()->Get() );
+	META_CONPRINTF( "Hook_ClientConnect(%d, \"%s\", %lli, \"%s\", %d, \"%s\")\n", slot, pszName, xuid, pszNetworkID, unk1, pRejectReason->ToGrowable()->Get() );
 
 	RETURN_META_VALUE(MRES_IGNORED, true);
 }
 
 void CS2Fixes::Hook_ClientPutInServer( CPlayerSlot slot, char const *pszName, int type, uint64 xuid )
 {
-	META_CONPRINTF( "Hook_ClientPutInServer(%d, \"%s\", %d, %d, %d)\n", slot, pszName, type, xuid );
+	META_CONPRINTF( "Hook_ClientPutInServer(%d, \"%s\", %d, %d, %lli)\n", slot, pszName, type, xuid );
 }
 
 void CS2Fixes::Hook_ClientDisconnect( CPlayerSlot slot, int reason, const char *pszName, uint64 xuid, const char *pszNetworkID )
 {
-	META_CONPRINTF( "Hook_ClientDisconnect(%d, %d, \"%s\", %d, \"%s\")\n", slot, reason, pszName, xuid, pszNetworkID );
+	g_playerManager->OnClientDisconnect(slot);
+	META_CONPRINTF( "Hook_ClientDisconnect(%d, %d, \"%s\", %lli, \"%s\")\n", slot, reason, pszName, xuid, pszNetworkID );
 }
 
 void CS2Fixes::Hook_GameFrame( bool simulating, bool bFirstTick, bool bLastTick )

@@ -5,35 +5,47 @@
 #include "commands.h"
 #include "interfaces/cs2_interfaces.h"
 #include "detours.h"
+#include "ctimer.h"
 #include "entity/ccsplayercontroller.h"
 #include "entity/ccsplayerpawn.h"
 #include "entity/cbasemodelentity.h"
+#include "entity/ccsweaponbase.h"
+#include "playermanager.h"
 
 #include "tier0/memdbgon.h"
+
+extern CGlobalVars *gpGlobals;
 
 DECLARE_DETOUR(Host_Say, Detour_Host_Say, &modules::server);
 DECLARE_DETOUR(UTIL_SayTextFilter, Detour_UTIL_SayTextFilter, &modules::server);
 DECLARE_DETOUR(UTIL_SayText2Filter, Detour_UTIL_SayText2Filter, &modules::server);
-DECLARE_DETOUR(VoiceShouldHear, Detour_VoiceShouldHear, &modules::server);
+DECLARE_DETOUR(IsHearingClient, Detour_IsHearingClient, &modules::engine);
 DECLARE_DETOUR(CSoundEmitterSystem_EmitSound, Detour_CSoundEmitterSystem_EmitSound, &modules::server);
+DECLARE_DETOUR(CCSWeaponBase_Spawn, Detour_CCSWeaponBase_Spawn, &modules::server);
+
+void FASTCALL Detour_CCSWeaponBase_Spawn(CBaseEntity *pThis, void *a2)
+{
+	const char *pszClassName = pThis->m_pEntity->m_designerName.String();
+
+	Message("Weapon spawn: %s\n", pszClassName);
+
+	CCSWeaponBase_Spawn(pThis, a2);
+
+	FixWeapon((CCSWeaponBase *)pThis);
+}
 
 void FASTCALL Detour_CSoundEmitterSystem_EmitSound(ISoundEmitterSystemBase *pSoundEmitterSystem, CEntityIndex *a2, IRecipientFilter &filter, uint32 a4, void *a5)
 {
+	//ConMsg("Detour_CSoundEmitterSystem_EmitSound\n");
 	CSoundEmitterSystem_EmitSound(pSoundEmitterSystem, a2, filter, a4, a5);
 }
 
-bool FASTCALL Detour_VoiceShouldHear(CCSPlayerController *a, CCSPlayerController *b, bool a3, bool voice)
+bool FASTCALL Detour_IsHearingClient(void* serverClient, int index)
 {
-	if (voice)
-	{
-		// Message("block");
+	if (g_playerManager->GetPlayer(index)->IsMuted())
 		return false;
-	}
 
-	// Message("a: %s, b: %s\n", &a->m_iszPlayerName(), &b->m_iszPlayerName());
-	// Message("VoiceShouldHear: %llx %llx %i %i\n", a, b, a3, voice);
-
-	return VoiceShouldHear(a, b, a3, voice);
+	return IsHearingClient(serverClient, index);
 }
 
 void FASTCALL Detour_UTIL_SayTextFilter(IRecipientFilter &filter, const char *pText, CCSPlayerController *pPlayer, uint64 eMessageType)
@@ -140,7 +152,7 @@ CUtlVector<CDetourBase *> g_vecDetours;
 
 void InitDetours()
 {
-	g_vecDetours.RemoveAll();
+	g_vecDetours.PurgeAndDeleteElements();
 
 	for (int i = 0; i < sizeof(g_LoggingDetours) / sizeof(*g_LoggingDetours); i++)
 		g_LoggingDetours[i].CreateDetour();
@@ -154,20 +166,17 @@ void InitDetours()
 	Host_Say.CreateDetour();
 	Host_Say.EnableDetour();
 
-	VoiceShouldHear.CreateDetour();
-	VoiceShouldHear.EnableDetour();
+	IsHearingClient.CreateDetour();
+	IsHearingClient.EnableDetour();
 
 	CSoundEmitterSystem_EmitSound.CreateDetour();
 	CSoundEmitterSystem_EmitSound.EnableDetour();
+
+	CCSWeaponBase_Spawn.CreateDetour();
+	CCSWeaponBase_Spawn.EnableDetour();
 }
 
 void FlushAllDetours()
 {
-	FOR_EACH_VEC(g_vecDetours, i)
-	{
-		Message("Removing detour %s\n", g_vecDetours[i]->GetName());
-		g_vecDetours[i]->FreeDetour();
-	}
-
-	g_vecDetours.RemoveAll();
+	g_vecDetours.Purge();
 }

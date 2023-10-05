@@ -8,6 +8,8 @@ typedef void (*FnChatCommandCallback_t)(const CCommand &args, CCSPlayerControlle
 
 extern CUtlMap<uint32, FnChatCommandCallback_t> g_CommandList;
 
+void SentChatToClient(int index, const char* msg, ...);
+
 // Just a wrapper class so we're able to insert the callback
 class CChatCommand
 {
@@ -23,6 +25,7 @@ struct WeaponMapEntry_t
 	const char *command;
 	const char *szWeaponName;
 	int iPrice;
+	uint16 iItemDefIndex;
 };
 
 void ParseChatCommand(const char *, CCSPlayerController *);
@@ -35,5 +38,6 @@ void ParseChatCommand(const char *, CCSPlayerController *);
 	}																																				\
 	static CChatCommand name##_chat_command(#name, name##_callback);																				\
 	static ConCommandRefAbstract name##_ref;																										\
-	static ConCommand name##_command(&name##_ref, COMMAND_PREFIX #name, name##_con_callback, description, FCVAR_CLIENT_CAN_EXECUTE);				\
+	static ConCommand name##_command(&name##_ref, COMMAND_PREFIX #name, name##_con_callback,														\
+									description, FCVAR_CLIENT_CAN_EXECUTE | FCVAR_LINKED_CONCOMMAND);												\
 	void name##_callback(const CCommand &args, CCSPlayerController *player)
