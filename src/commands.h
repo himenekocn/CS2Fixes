@@ -1,3 +1,22 @@
+/**
+ * =============================================================================
+ * CS2Fixes
+ * Copyright (C) 2023 Source2ZE
+ * =============================================================================
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, version 3.0, as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #pragma once
 #include "entity/ccsplayercontroller.h"
 #include "convar.h"
@@ -8,7 +27,8 @@ typedef void (*FnChatCommandCallback_t)(const CCommand &args, CCSPlayerControlle
 
 extern CUtlMap<uint32, FnChatCommandCallback_t> g_CommandList;
 
-void SentChatToClient(int index, const char* msg, ...);
+void ClientPrintAll(int destination, const char *msg, ...);
+void ClientPrint(CBasePlayerController *player, int destination, const char *msg, ...);
 
 // Just a wrapper class so we're able to insert the callback
 class CChatCommand

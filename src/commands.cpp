@@ -1,5 +1,25 @@
+/**
+ * =============================================================================
+ * CS2Fixes
+ * Copyright (C) 2023 Source2ZE
+ * =============================================================================
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, version 3.0, as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "detours.h"
 #include "common.h"
+#include "utlstring.h"
 #include "recipientfilters.h"
 #include "commands.h"
 #include "utils/entity.h"
@@ -11,6 +31,8 @@
 #include "adminsystem.h"
 
 #include "tier0/memdbgon.h"
+
+extern CEntitySystem *g_pEntitySystem;
 
 WeaponMapEntry_t WeaponMap[] = {
 	{"bizon",		  "weapon_bizon",			 1400, 26},
@@ -93,7 +115,7 @@ void ParseChatCommand(const char *pMessage, CCSPlayerController *pController)
 	}
 }
 
-void SendConsoleChat(const char *msg, ...)
+void ClientPrintAll(int hud_dest, const char *msg, ...)
 {
 	va_list args;
 	va_start(args, msg);
@@ -103,12 +125,10 @@ void SendConsoleChat(const char *msg, ...)
 
 	va_end(args);
 
-	CCommand newArgs;
-	newArgs.Tokenize(buf);
-	Host_Say(nullptr, &newArgs, false, 0, nullptr);
+	addresses::UTIL_ClientPrintAll(hud_dest, buf, nullptr, nullptr, nullptr, nullptr);
 }
 
-void SentChatToClient(int index, const char *msg, ...)
+void ClientPrint(CBasePlayerController *player, int hud_dest, const char *msg, ...)
 {
 	va_list args;
 	va_start(args, msg);
@@ -118,32 +138,33 @@ void SentChatToClient(int index, const char *msg, ...)
 
 	va_end(args);
 
-	CSingleRecipientFilter filter(index);
-
-	UTIL_SayTextFilter(filter, buf, nullptr, 0);
+	addresses::ClientPrint(player, hud_dest, buf, nullptr, nullptr, nullptr, nullptr);
 }
 
 CON_COMMAND_CHAT(stopsound, "stop weapon sounds")
 {
+	if (!player)
+		return;
+
 	int iPlayer = player->entindex() - 1;
 
-	ZEPlayer *pPlayer = g_playerManager->GetPlayer(iPlayer);
+	ZEPlayer *pZEPlayer = g_playerManager->GetPlayer(iPlayer);
 
 	// Something has to really go wrong for this to happen
-	if (!pPlayer)
+	if (!pZEPlayer)
 	{
-		Warning("%d Tried to access a null ZEPlayer!!\n", iPlayer);
+		Warning("%s Tried to access a null ZEPlayer!!\n", player->m_iszPlayerName());
 		return;
 	}
 
-	SentChatToClient(iPlayer, " \7[CS2Fixes]\1 You have toggled weapon effects.");
+	pZEPlayer->ToggleStopSound();
 
-	pPlayer->ToggleStopSound();
+	ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 You have toggled weapon effects.");
 }
 
 CON_COMMAND_CHAT(say, "say something using console")
 {
-	SendConsoleChat("%s", args.ArgS());
+	ClientPrintAll(HUD_PRINTTALK, "%s", args.ArgS());
 }
 
 CON_COMMAND_CHAT(takemoney, "take your money")
@@ -196,10 +217,11 @@ CON_COMMAND_CHAT(test_target, "test string targetting")
 	if (!player)
 		return;
 
+	int iCommandPlayer = player->entindex() - 1;
 	int iNumClients = 0;
 	int pSlots[MAXPLAYERS];
 
-	g_playerManager->TargetPlayerString(args[1], iNumClients, pSlots);
+	g_playerManager->TargetPlayerString(iCommandPlayer, args[1], iNumClients, pSlots);
 
 	for (int i = 0; i < iNumClients; i++)
 	{
@@ -208,7 +230,7 @@ CON_COMMAND_CHAT(test_target, "test string targetting")
 		if (!pTarget)
 			continue;
 
-		SentChatToClient(player->entindex() - 1, " \7[CS2Fixes]\1 Targeting %s", &pTarget->m_iszPlayerName());
+		ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 Targeting %s", &pTarget->m_iszPlayerName());
 		Message("Targeting %s\n", &pTarget->m_iszPlayerName());
 	}
 }
@@ -220,7 +242,7 @@ CON_COMMAND_CHAT(getorigin, "get your origin")
 
 	Vector vecAbsOrigin = player->m_hPawn()->GetAbsOrigin();
 
-	SentChatToClient(player->entindex() - 1, " \7[CS2Fixes]\1 Your origin is %f %f %f", vecAbsOrigin.x, vecAbsOrigin.y, vecAbsOrigin.z);
+	ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 Your origin is %f %f %f", vecAbsOrigin.x, vecAbsOrigin.y, vecAbsOrigin.z);
 }
 
 CON_COMMAND_CHAT(setorigin, "set your origin")
@@ -235,7 +257,30 @@ CON_COMMAND_CHAT(setorigin, "set your origin")
 
 	pPawn->SetAbsOrigin(vecNewOrigin);
 
-	SentChatToClient(player->entindex() - 1, " \7[CS2Fixes]\1 Your origin is now %f %f %f", vecNewOrigin.x, vecNewOrigin.y, vecNewOrigin.z);
+	ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 Your origin is now %f %f %f", vecNewOrigin.x, vecNewOrigin.y, vecNewOrigin.z);
+}
+
+CON_COMMAND_CHAT(getstats, "get your stats")
+{
+	if (!player)
+		return;
+
+	CSMatchStats_t stats = player->m_pActionTrackingServices()->m_matchStats();
+
+	ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 Kills: %d", stats.m_iKills());
+	ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 Deaths: %d", stats.m_iDeaths());
+	ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 Assists: %d", stats.m_iAssists());
+	ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 Damage: %d", stats.m_iDamage());
+}
+
+CON_COMMAND_CHAT(setkills, "set your kills")
+{
+	if (!player)
+		return;
+
+	player->m_pActionTrackingServices()->m_matchStats().m_iKills(atoi(args[1]));
+
+	ClientPrint(player, HUD_PRINTTALK, " \7[CS2Fixes]\1 You have set your kills to %d.", atoi(args[1]));
 }
 
 // Lookup a weapon classname in the weapon map and "initialize" it.

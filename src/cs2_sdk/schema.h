@@ -1,3 +1,22 @@
+/**
+ * =============================================================================
+ * CS2Fixes
+ * Copyright (C) 2023 Source2ZE
+ * =============================================================================
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, version 3.0, as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #pragma once
 
 #include "stdint.h"
@@ -75,8 +94,8 @@ inline constexpr uint64_t hash_64_fnv1a_const(const char *const str, const uint6
 		else if(m_key.networked)																					\
 		{																											\
 			/* WIP: Works fine for most props, but inlined classes in the middle of a class will
-				need to have their this pointer corrected by the offset .*/											\
-			Message("Attempting to call SetStateChanged on on %s::%s\n", ThisClass, #varName);						\
+				need to have their this pointer corrected by the offset .											
+			Message("Attempting to call SetStateChanged on on %s::%s\n", ThisClass, #varName);*/				    \
 			if (!IsStruct)																							\
 				SetStateChanged((Z_CBaseEntity*)this, m_key.offset + extra_offset);									\
 			else if (IsPlatformPosix()) /* This is currently broken on windows */									\

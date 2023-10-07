@@ -1,9 +1,53 @@
+/**
+ * =============================================================================
+ * CS2Fixes
+ * Copyright (C) 2023 Source2ZE
+ * =============================================================================
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, version 3.0, as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #pragma once
 #include <platform.h>
 
 #include "../schema.h"
 
 class CBaseEntity;
+
+struct CSPerRoundStats_t
+{
+public:
+	DECLARE_SCHEMA_CLASS_INLINE(CSPerRoundStats_t)
+
+	SCHEMA_FIELD(int, m_iKills)
+	SCHEMA_FIELD(int, m_iDeaths)
+	SCHEMA_FIELD(int, m_iAssists)
+	SCHEMA_FIELD(int, m_iDamage)
+};
+
+struct CSMatchStats_t : public CSPerRoundStats_t
+{
+public:
+	DECLARE_SCHEMA_CLASS_INLINE(CSMatchStats_t)
+};
+
+class CCSPlayerController_ActionTrackingServices
+{
+public:
+	DECLARE_SCHEMA_CLASS(CCSPlayerController_ActionTrackingServices)
+
+	SCHEMA_FIELD(CSMatchStats_t, m_matchStats)
+};
 
 class CPlayer_MovementServices
 {
