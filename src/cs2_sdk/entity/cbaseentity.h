@@ -23,8 +23,15 @@
 #include "ccollisionproperty.h"
 #include "mathlib/vector.h"
 #include "baseentity.h"
+#include "ehandle.h"
 
 CGlobalVars* GetGameGlobals();
+
+class CNetworkTransmitComponent
+{
+public:
+	DECLARE_SCHEMA_CLASS_INLINE(CNetworkTransmitComponent)
+};
 
 class CNetworkOriginCellCoordQuantizedVector
 {
@@ -106,12 +113,15 @@ public:
 class Z_CBaseEntity : public CBaseEntity
 {
 public:
-	DECLARE_SCHEMA_CLASS(CBaseEntity)
+	// This is a unique case as CBaseEntity is already defined in the sdk
+	typedef Z_CBaseEntity ThisClass;
+	static constexpr const char *ThisClassName = "CBaseEntity";
+	static constexpr bool IsStruct = false;
 
 	SCHEMA_FIELD(CBodyComponent *, m_CBodyComponent)
 	SCHEMA_FIELD(CBitVec<64>, m_isSteadyState)
 	SCHEMA_FIELD(float, m_lastNetworkChange)
-	PSCHEMA_FIELD(void*, m_NetworkTransmitComponent)
+	SCHEMA_FIELD_POINTER(CNetworkTransmitComponent, m_NetworkTransmitComponent)
 	SCHEMA_FIELD(int, m_iHealth)
 	SCHEMA_FIELD(int, m_iTeamNum)
 	SCHEMA_FIELD(Vector, m_vecBaseVelocity)
@@ -122,9 +132,32 @@ public:
 
 	int entindex() { return m_pEntity->m_EHandle.GetEntryIndex(); }
 
-	Vector GetAbsOrigin() { return m_CBodyComponent()->m_pSceneNode()->m_vecAbsOrigin(); }
-
-	void SetAbsOrigin(Vector vecOrigin) { m_CBodyComponent()->m_pSceneNode()->m_vecAbsOrigin(vecOrigin); }
+	Vector GetAbsOrigin() { return m_CBodyComponent->m_pSceneNode->m_vecAbsOrigin; }
+	void SetAbsOrigin(Vector vecOrigin) { m_CBodyComponent->m_pSceneNode->m_vecAbsOrigin = vecOrigin; }
 
 	void Teleport(Vector *position, QAngle *angles, Vector *velocity) { CALL_VIRTUAL(void, 148, this, position, angles, velocity); }
+
+	void CollisionRulesChanged() { CALL_VIRTUAL(void, offsets::CollisionRulesChanged, this); }
+
+	CHandle<CBaseEntity> GetHandle() { return m_pEntity->m_EHandle; }
+
+	static Z_CBaseEntity* EntityFromHandle(CHandle<CBaseEntity> handle) {
+		if (!handle.IsValid())
+			return nullptr;
+
+		auto entity = handle.Get();
+
+		if (entity && entity->m_pEntity->m_EHandle == handle)
+			return (Z_CBaseEntity*) entity;
+
+		return nullptr;
+	}
+};
+
+class SpawnPoint : public Z_CBaseEntity
+{
+public:
+	DECLARE_SCHEMA_CLASS(SpawnPoint);
+
+	SCHEMA_FIELD(bool, m_bEnabled);
 };

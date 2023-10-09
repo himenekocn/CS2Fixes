@@ -150,14 +150,7 @@ ETargetType CPlayerManager::TargetPlayerString(int iCommandClient, const char* t
 	}
 	else if (targetType >= ETargetType::RANDOM)
 	{
-		static bool seeded = false;
 		int attempts = 0;
-
-		if (!seeded)
-		{
-			srand(time(0));
-			seeded = true;
-		}
 
 		while (iNumClients == 0 && attempts < 10000)
 		{
@@ -192,7 +185,7 @@ ETargetType CPlayerManager::TargetPlayerString(int iCommandClient, const char* t
 			if (!player)
 				continue;
 
-			if (V_stristr(const_cast<const char*>(&player->m_iszPlayerName()), const_cast<const char*>(target)))
+			if (V_stristr(player->GetPlayerName(), target))
 			{
 				targetType = ETargetType::PLAYER;
 				clients[iNumClients++] = i;
