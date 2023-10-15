@@ -42,8 +42,11 @@ public:
 	{ 
 		m_bAuthenticated = false;
 		m_bStopSound = false;
+		m_bStopDecals = true;
 		m_iAdminFlags = 0;
 		m_SteamID = nullptr;
+		m_bGagged = false;
+		m_bMuted = false;
 	}
 
 	bool IsFakeClient() { return m_bFakeClient; }
@@ -60,7 +63,9 @@ public:
 	void SetGagged(bool gagged) { m_bGagged = gagged; }
 
 	void ToggleStopSound() { m_bStopSound = !m_bStopSound; }
+	void ToggleStopDecals() { m_bStopDecals = !m_bStopDecals; }
 	bool IsUsingStopSound() { return m_bStopSound; }
+	bool IsUsingStopDecals() { return m_bStopDecals; }
 	bool IsMuted() { return m_bMuted; }
 	bool IsGagged() { return m_bGagged; }
 	CPlayerSlot GetPlayerSlot() { return m_slot; }
@@ -73,6 +78,7 @@ private:
 	bool m_bAuthenticated;
 	const CSteamID* m_SteamID;
 	bool m_bStopSound;
+	bool m_bStopDecals;
 	bool m_bFakeClient;
 	bool m_bMuted;
 	bool m_bGagged;
