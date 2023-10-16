@@ -37,7 +37,7 @@ jobs:
       - name: Compiling files
         working-directory: cs2fixes
         run: |
-          export HL2SDKCS2=${{ github.workspace }}/cs2fixes/sdk
+          export HL2SDKCS2=/__w/CS2Fixes-Build/CS2Fixes-Build/cs2fixes/sdk
           python3 configure.py --enable-optimize --symbol-files --sdks cs2
           ambuild objdir
           
@@ -81,7 +81,6 @@ jobs:
         working-directory: cs2fixes
         run: |
           $env:HL2SDKCS2 = '${{ github.workspace }}/cs2fixes/sdk'
-          echo "SDK Directory is $env:HL2SDKCS2"
           python3 configure.py --enable-optimize --symbol-files --sdks cs2
           ambuild objdir
           
