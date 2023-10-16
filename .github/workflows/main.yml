@@ -28,13 +28,6 @@ jobs:
           ref: master
           path: metamod-source
 
-      - name: Checking out hl2sdk
-        uses: actions/checkout@v3
-        with:
-          repository: alliedmodders/hl2sdk
-          ref: cs2
-          path: hl2sdk-cs2
-
       - name: Checking out own repository
         uses: actions/checkout@v3
         with:
@@ -44,6 +37,7 @@ jobs:
       - name: Compiling files
         working-directory: cs2fixes
         run: |
+          export HL2SDKCS2=./sdk
           python3 configure.py --enable-optimize --symbol-files --sdks cs2
           ambuild objdir
           
@@ -76,13 +70,6 @@ jobs:
           repository: alliedmodders/metamod-source
           ref: master
           path: metamod-source
-
-      - name: Checking out hl2sdk
-        uses: actions/checkout@v3
-        with:
-          repository: alliedmodders/hl2sdk
-          ref: cs2
-          path: hl2sdk-cs2
           
       - name: Checking out own repository
         uses: actions/checkout@v3
@@ -93,6 +80,7 @@ jobs:
       - name: Compiling files
         working-directory: cs2fixes
         run: |
+          export HL2SDKCS2=./sdk
           python3 configure.py --enable-optimize --symbol-files --sdks cs2
           ambuild objdir
           
