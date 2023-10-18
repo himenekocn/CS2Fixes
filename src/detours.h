@@ -20,6 +20,8 @@
 #pragma once
 #include "cdetour.h"
 
+
+class CCheckTransmitInfo;
 class IRecipientFilter;
 class ISoundEmitterSystemBase;
 class CBaseEntity;

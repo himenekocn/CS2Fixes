@@ -36,6 +36,9 @@
 
 
 extern CEntitySystem *g_pEntitySystem;
+extern IVEngineServer2* g_pEngineServer2;
+extern int g_targetPawn;
+extern int g_targetController;
 
 WeaponMapEntry_t WeaponMap[] = {
 	{"bizon",		  "weapon_bizon",			 1400, 26},
@@ -226,6 +229,16 @@ CON_COMMAND_CHAT(toggledecals, "toggle world decals, if you're into having 10 fp
 	ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "You have %s world decals", pZEPlayer->IsUsingStopDecals() ? "disabled" : "enabled");
 }
 
+CON_COMMAND_CHAT(myuid, "test")
+{
+	if (!player)
+		return;
+
+	int iPlayer = player->GetPlayerSlot();
+
+	ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "Your userid is %i, slot: %i, retrieved slot: %i", g_pEngineServer2->GetPlayerUserId(iPlayer).Get(), iPlayer, g_playerManager->GetSlotFromUserId(g_pEngineServer2->GetPlayerUserId(iPlayer).Get()));
+}
+
 CON_COMMAND_CHAT(ztele, "teleport to spawn")
 {
 	if (!player)
@@ -268,16 +281,9 @@ CON_COMMAND_CHAT(ztele, "teleport to spawn")
 		{
 			//Convert handle into controller so we can use it again, and check it isn't invalid
 			CCSPlayerController* controller = (CCSPlayerController*)Z_CBaseEntity::EntityFromHandle(handle);
-			if (!controller)
-			{
-				ConMsg("Couldn't resolve entity handle\n");
+
+			if (!controller || controller->m_iConnected() != PlayerConnectedState::PlayerConnected)
 				return;
-			}
-			if (controller->m_iConnected() != PlayerConnectedState::PlayerConnected)
-			{
-				ConMsg("Controller is not connected\n");
-				return;
-			}
 
 			//Get pawn (again) so we can do shit
 			CBasePlayerPawn* pPawn2 = controller->m_hPawn();
@@ -303,7 +309,49 @@ CON_COMMAND_CHAT(ztele, "teleport to spawn")
 		});
 }
 
-#ifdef _DEBUG
+// TODO: Make this a convar when it's possible to do so
+static constexpr int g_iMaxHideDistance = 2000;
+
+CON_COMMAND_CHAT(hide, "hides nearby teammates")
+{
+	if (!player)
+		return;
+
+	if (args.ArgC() < 2)
+	{
+		ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "Usage: !hide <distance> (0 to disable)");
+		return;
+	}
+
+	int distance = V_StringToInt32(args[1], -1);
+
+	if (distance > g_iMaxHideDistance || distance < 0)
+	{
+		ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "You can only hide players between 0 and %i units away.", g_iMaxHideDistance);
+		return;
+	}
+
+	int iPlayer = player->GetPlayerSlot();
+
+	ZEPlayer *pZEPlayer = g_playerManager->GetPlayer(iPlayer);
+
+	// Something has to really go wrong for this to happen
+	if (!pZEPlayer)
+	{
+		Warning("%s Tried to access a null ZEPlayer!!\n", player->GetPlayerName());
+		return;
+	}
+
+	pZEPlayer->SetHideDistance(distance);
+
+	if (distance == 0)
+		ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "Hiding teammates is now disabled.", distance);
+	else
+		ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "Now hiding teammates within %i units.", distance);
+}
+
+
+#if _DEBUG
 CON_COMMAND_CHAT(message, "message someone")
 {
 	if (!player)

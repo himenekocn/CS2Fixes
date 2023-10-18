@@ -884,7 +884,7 @@ bool CAdminSystem::LoadInfractions()
 	for (KeyValues* pKey = pKV->GetFirstSubKey(); pKey; pKey = pKey->GetNextKey())
 	{
 		uint64 iSteamId = pKey->GetUint64("steamid", -1);
-		int iEndTime = pKey->GetInt("endtime", -1);
+		time_t iEndTime = pKey->GetUint64("endtime", -1);
 		int iType = pKey->GetInt("type", -1);
 
 		if (iSteamId == -1)
@@ -908,13 +908,13 @@ bool CAdminSystem::LoadInfractions()
 		switch (iType)
 		{
 		case CInfractionBase::Ban:
-			AddInfraction(new CBanInfraction(iEndTime, iSteamId));
+			AddInfraction(new CBanInfraction(iEndTime, iSteamId, true));
 			break;
 		case CInfractionBase::Mute:
-			AddInfraction(new CMuteInfraction(iEndTime, iSteamId));
+			AddInfraction(new CMuteInfraction(iEndTime, iSteamId, true));
 			break;
 		case CInfractionBase::Gag:
-			AddInfraction(new CGagInfraction(iEndTime, iSteamId));
+			AddInfraction(new CGagInfraction(iEndTime, iSteamId, true));
 			break;
 		default:
 			Warning("Invalid infraction type %d\n", iType);
@@ -932,7 +932,7 @@ void CAdminSystem::SaveInfractions()
 
 	FOR_EACH_VEC(m_vecInfractions, i)
 	{
-		int timestamp = m_vecInfractions[i]->GetTimestamp();
+		time_t timestamp = m_vecInfractions[i]->GetTimestamp();
 		if (timestamp != 0 && timestamp < std::time(0))
 			continue;
 
@@ -940,7 +940,7 @@ void CAdminSystem::SaveInfractions()
 		V_snprintf(buf, sizeof(buf), "%d", i);
 		pSubKey = new KeyValues(buf);
 		pSubKey->AddUint64("steamid", m_vecInfractions[i]->GetSteamId64());
-		pSubKey->AddInt("endtime", m_vecInfractions[i]->GetTimestamp());
+		pSubKey->AddUint64("endtime", m_vecInfractions[i]->GetTimestamp());
 		pSubKey->AddInt("type", m_vecInfractions[i]->GetType());
 
 		pKV->AddSubKey(pSubKey);
@@ -957,24 +957,41 @@ void CAdminSystem::AddInfraction(CInfractionBase* infraction)
 	m_vecInfractions.AddToTail(infraction);
 }
 
-void CAdminSystem::ApplyInfractions(ZEPlayer *player)
+
+// This function can run at least twice when a player connects: Immediately upon client connection, and also upon getting authenticated by steam.
+// It's also run when we're periodically checking for infraction expiry in the case of mutes/gags.
+// This returns false only when called from ClientConnect and the player is banned in order to reject them.
+bool CAdminSystem::ApplyInfractions(ZEPlayer *player)
 {
 	FOR_EACH_VEC(m_vecInfractions, i)
 	{
-		// Undo the infraction just briefly while checking if it ran out
-		if (m_vecInfractions[i]->GetSteamId64() == player->GetSteamId64())
-			m_vecInfractions[i]->UndoInfraction(player);
+		// Because this can run without the player being authenticated, and the fact that we're applying a ban/mute here,
+		// we can immediately just use the steamid we got from the connecting player.
+		uint64 iSteamID = player->IsAuthenticated() ? 
+			player->GetSteamId64() : g_pEngineServer2->GetClientSteamID(player->GetPlayerSlot())->ConvertToUint64();
 
-		int timestamp = m_vecInfractions[i]->GetTimestamp();
+		// We're only interested in infractions concerning this player
+		if (m_vecInfractions[i]->GetSteamId64() != iSteamID)
+			continue;
+
+		// Undo the infraction just briefly while checking if it ran out
+		m_vecInfractions[i]->UndoInfraction(player);
+
+		time_t timestamp = m_vecInfractions[i]->GetTimestamp();
 		if (timestamp != 0 && timestamp <= std::time(0))
 		{
 			m_vecInfractions.Remove(i);
 			continue;
 		}
 
-		if (m_vecInfractions[i]->GetSteamId64() == player->GetSteamId64())
-			m_vecInfractions[i]->ApplyInfraction(player);
+		// We are called from ClientConnect and the player is banned, immediately reject them
+		if (!player->IsConnected() && m_vecInfractions[i]->GetType() == CInfractionBase::EInfractionType::Ban)
+			return false;
+		
+		m_vecInfractions[i]->ApplyInfraction(player);
 	}
+
+	return true;
 }
 
 bool CAdminSystem::FindAndRemoveInfraction(ZEPlayer *player, CInfractionBase::EInfractionType type)
@@ -1026,7 +1043,7 @@ uint64 CAdminSystem::ParseFlags(const char* pszFlags)
 
 void CBanInfraction::ApplyInfraction(ZEPlayer *player)
 {
-	g_pEngineServer2->DisconnectClient(player->GetPlayerSlot().Get(), NETWORK_DISCONNECT_REJECT_BANNED); // "Kicked and banned"
+	g_pEngineServer2->DisconnectClient(player->GetPlayerSlot(), NETWORK_DISCONNECT_KICKBANADDED); // "Kicked and banned"
 }
 
 void CMuteInfraction::ApplyInfraction(ZEPlayer* player)
