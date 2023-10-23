@@ -64,7 +64,6 @@ bool ZEPlayer::IsAdminFlagSet(uint64 iFlag)
 void CPlayerManager::OnBotConnected(CPlayerSlot slot)
 {
 	m_vecPlayers[slot.Get()] = new ZEPlayer(slot, true);
-	m_UserIdLookup[g_pEngineServer2->GetPlayerUserId(slot).Get()] = slot.Get();
 }
 
 bool CPlayerManager::OnClientConnected(CPlayerSlot slot)
@@ -84,7 +83,6 @@ bool CPlayerManager::OnClientConnected(CPlayerSlot slot)
 
 	pPlayer->SetConnected();
 	m_vecPlayers[slot.Get()] = pPlayer;
-	m_UserIdLookup[g_pEngineServer2->GetPlayerUserId(slot).Get()] = slot.Get();
 
 	ResetPlayerFlags(slot.Get());
 	
@@ -97,9 +95,21 @@ void CPlayerManager::OnClientDisconnect(CPlayerSlot slot)
 
 	delete m_vecPlayers[slot.Get()];
 	m_vecPlayers[slot.Get()] = nullptr;
-	m_UserIdLookup[g_pEngineServer2->GetPlayerUserId(slot).Get()] = -1;
 
 	ResetPlayerFlags(slot.Get());
+}
+
+void CPlayerManager::OnLateLoad()
+{
+	for (int i = 0; i < GetMaxPlayers(); i++)
+	{
+		CCSPlayerController *pController = (CCSPlayerController *)g_pEntitySystem->GetBaseEntity(CEntityIndex(i + 1));
+
+		if (!pController || !pController->IsConnected())
+			continue;
+
+		OnClientConnected(i);
+	}
 }
 
 void CPlayerManager::TryAuthenticate()
@@ -140,7 +150,7 @@ void CPlayerManager::CheckHideDistances()
 	if (!g_pEntitySystem)
 		return;
 
-	for (int i = 0; i < MAXPLAYERS; i++)
+	for (int i = 0; i < GetMaxPlayers(); i++)
 	{
 		auto player = GetPlayer(i);
 
@@ -166,7 +176,7 @@ void CPlayerManager::CheckHideDistances()
 		auto vecPosition = pPawn->GetAbsOrigin();
 		int team = pController->m_iTeamNum;
 
-		for (int j = 1; j < MAXPLAYERS + 1; j++)
+		for (int j = 1; j < GetMaxPlayers() + 1; j++)
 		{
 			if (j - 1 == i)
 				continue;
@@ -204,7 +214,7 @@ ETargetType CPlayerManager::TargetPlayerString(int iCommandClient, const char* t
 	else if (!V_stricmp(target, "@randomct"))
 		targetType = ETargetType::RANDOM_CT;
 	
-	if (targetType == ETargetType::SELF)
+	if (targetType == ETargetType::SELF && iCommandClient != -1)
 	{
 		clients[iNumClients++] = iCommandClient;
 	}
@@ -295,17 +305,28 @@ ETargetType CPlayerManager::TargetPlayerString(int iCommandClient, const char* t
 	return targetType;
 }
 
-CPlayerSlot CPlayerManager::GetSlotFromUserId(int userid)
+// In userids, the lower byte is always the player slot
+CPlayerSlot CPlayerManager::GetSlotFromUserId(uint16 userid)
 {
-	return m_UserIdLookup[userid];
+	return CPlayerSlot(userid & 0xFF);
 }
 
-ZEPlayer *CPlayerManager::GetPlayerFromUserId(int userid)
+ZEPlayer *CPlayerManager::GetPlayerFromUserId(uint16 userid)
 {
-	if (m_UserIdLookup[userid] == -1)
+	uint8 index = userid & 0xFF;
+
+	if (index >= GetMaxPlayers())
 		return nullptr;
 
-	return m_vecPlayers[m_UserIdLookup[userid]];
+	return m_vecPlayers[index];
+}
+
+int CPlayerManager::GetMaxPlayers()
+{
+	// quick and dirty fix for now until we can get maxplayers properly
+	static int iMaxPlayers = CommandLine()->ParmValue("-maxplayers", 64);
+
+	return iMaxPlayers;
 }
 
 void CPlayerManager::SetPlayerStopSound(int slot, bool set)

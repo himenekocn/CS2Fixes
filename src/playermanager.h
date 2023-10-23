@@ -98,29 +98,41 @@ private:
 class CPlayerManager
 {
 public:
-	CPlayerManager()
+	CPlayerManager(bool late = false)
 	{
 		V_memset(m_vecPlayers, 0, sizeof(m_vecPlayers));
-		V_memset(m_UserIdLookup, -1, sizeof(m_UserIdLookup));
 		m_nUsingStopSound = 0;
 		m_nUsingSilenceSound = -1; // On by default
 		m_nUsingStopDecals = -1; // On by default
+
+		if (late)
+			OnLateLoad();
 	}
 
 	bool OnClientConnected(CPlayerSlot slot);
 	void OnClientDisconnect(CPlayerSlot slot);
 	void OnBotConnected(CPlayerSlot slot);
+	void OnLateLoad();
 	void TryAuthenticate();
 	void CheckInfractions();
 	void CheckHideDistances();
-	CPlayerSlot GetSlotFromUserId(int userid);
-	ZEPlayer *GetPlayerFromUserId(int userid);
+	CPlayerSlot GetSlotFromUserId(uint16 userid);
+	ZEPlayer *GetPlayerFromUserId(uint16 userid);
 	ETargetType TargetPlayerString(int iCommandClient, const char* target, int &iNumClients, int *clients);
-	ZEPlayer *GetPlayer(CPlayerSlot slot) { return m_vecPlayers[slot.Get()]; };
+
+	ZEPlayer *GetPlayer(CPlayerSlot slot)
+	{
+		if (slot.Get() < 0 || slot.Get() >= GetMaxPlayers())
+			return nullptr;
+
+		return m_vecPlayers[slot.Get()];
+	};
 
 	uint64 GetStopSoundMask() { return m_nUsingStopSound; }
 	uint64 GetSilenceSoundMask() { return m_nUsingSilenceSound; }
 	uint64 GetStopDecalsMask() { return m_nUsingStopDecals; }
+
+	int GetMaxPlayers();
 	
 	void SetPlayerStopSound(int slot, bool set);
 	void SetPlayerSilenceSound(int slot, bool set);
@@ -133,8 +145,7 @@ public:
 	bool IsPlayerUsingStopDecals(int slot) { return m_nUsingStopDecals & ((uint64)1 << slot); }
 
 private:
-	ZEPlayer* m_vecPlayers[MAXPLAYERS];
-	uint16 m_UserIdLookup[USHRT_MAX+1];
+	ZEPlayer *m_vecPlayers[MAXPLAYERS];
 
 	uint64 m_nUsingStopSound;
 	uint64 m_nUsingSilenceSound;
