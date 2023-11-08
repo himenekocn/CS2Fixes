@@ -2,90 +2,72 @@ name: Build
 
 on:
   push:
+    branches:
+      - main
     paths-ignore:
     - LICENSE
     - README.md
+    - 'configs**'
+    - '**.sln'
+    - '**.vcxproj**'
   pull_request:
     paths-ignore:
     - LICENSE
     - README.md
+    - 'configs**'
+    - '**.sln'
+    - '**.vcxproj**'
 
 jobs:
-  linux:
-    name: linux build
-    runs-on: ubuntu-latest
-    container:
-      image: idk1703/build-img:11
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    env:
+        HL2SDKCS2: ${{ github.workspace }}/CS2Fixes/sdk
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: windows-latest
+          - os: ubuntu-latest
+            container: registry.gitlab.steamos.cloud/steamrt/sniper/sdk
     steps:
-      - name: Prepare env
-        shell: bash
-        run: echo "GITHUB_SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_ENV
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: CS2Fixes
+          submodules: recursive
 
-      - name: Checking out MM:Source
-        uses: actions/checkout@v3
+      - name: Checkout Metamod
+        uses: actions/checkout@v4
         with:
           repository: alliedmodders/metamod-source
           ref: master
-          path: metamod-source
-
-      - name: Checking out own repository
-        uses: actions/checkout@v3
-        with:
-          path: cs2fixes
+          path: mmsource-2.0
           submodules: recursive
 
-      - name: Compiling files
-        working-directory: cs2fixes
-        run: |
-          export HL2SDKCS2=/__w/CS2Fixes-Build/CS2Fixes-Build/cs2fixes/sdk
-          python3 configure.py --enable-optimize --symbol-files --sdks cs2
-          ambuild objdir
-          
-      - name: Uploading package
-        uses: actions/upload-artifact@v3
+      - name: Checkout AMBuild
+        uses: actions/checkout@v4
         with:
-          name: cs2fixes-linux-${{ env.GITHUB_SHA_SHORT }}
-          path: cs2fixes/objdir/package
+          repository: alliedmodders/ambuild
+          path: ambuild
 
-  windows:
-    name: windows build
-    runs-on: windows-latest
-    steps:
-      - name: Prepare env
+      - name: Install AMBuild
+        run: |
+          cd ambuild && python setup.py install && cd ..
+
+      - name: Build
+        working-directory: CS2Fixes
         shell: bash
         run: |
-          echo "GITHUB_SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_ENV
-      - name: Setting up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10' 
-
-      - name: Install Python dependencies
-        run: |
-          python3 -m pip install --upgrade pip setuptools wheel
-          pip install git+https://github.com/alliedmodders/ambuild
-      - name: Checking out MM:Source
-        uses: actions/checkout@v3
-        with:
-          repository: alliedmodders/metamod-source
-          ref: master
-          path: metamod-source
-          
-      - name: Checking out own repository
-        uses: actions/checkout@v3
-        with:
-          path: cs2fixes
-          submodules: recursive
-
-      - name: Compiling files
-        working-directory: cs2fixes
-        run: |
-          $env:HL2SDKCS2 = '${{ github.workspace }}/cs2fixes/sdk'
-          python3 configure.py --enable-optimize --symbol-files --sdks cs2
-          ambuild objdir
+          mkdir build && cd build
+          python ../configure.py --enable-optimize --symbol-files --sdks cs2
+          ambuild
           
       - name: Uploading package
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: cs2fixes-windows-${{ env.GITHUB_SHA_SHORT }}
-          path: cs2fixes/objdir/package
+          name: CS2Fixes-${{ matrix.os }}-${{ env.GITHUB_SHA_SHORT }}
+          path: CS2Fixes
