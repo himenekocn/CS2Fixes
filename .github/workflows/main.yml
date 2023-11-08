@@ -67,7 +67,7 @@ jobs:
           ambuild
           
       - name: Uploading package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: CS2Fixes-${{ matrix.os }}-${{ env.GITHUB_SHA_SHORT }}
           path: CS2Fixes
