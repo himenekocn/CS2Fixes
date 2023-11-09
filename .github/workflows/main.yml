@@ -47,10 +47,10 @@ jobs:
           path: mmsource-2.0
           submodules: recursive
 
-      - name: Setup Python 3.10
-        uses: actions/setup-python@v3
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v4.7.1
         with:
-          python-version: 3.10
+          python-version: 3.9
 
       - name: Install AMBuild
         run: |
