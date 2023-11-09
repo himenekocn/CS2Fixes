@@ -32,7 +32,7 @@ jobs:
         include:
           - os: windows-latest
           - os: ubuntu-latest
-            container: registry.gitlab.steamos.cloud/steamrt/sniper/sdk
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
         with:
           repository: alliedmodders/hl2sdk
           ref: cs2
-          path: sdk
+          path: CS2Fixes/sdk
 
       - name: Build
         working-directory: CS2Fixes
