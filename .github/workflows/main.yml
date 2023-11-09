@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: protocolbuffers/protobuf
-          ref: dab4d24d44
+          ref: 21.x
           path: CS2Fixes/vendor/protobuf-3.21.8
 
       - name: Build
