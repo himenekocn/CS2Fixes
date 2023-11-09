@@ -57,21 +57,6 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install git+https://github.com/alliedmodders/ambuild
 
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y gcc-multilib g++-multilib llvm-10 clang-10
-
-      - name: Select clang compiler (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          echo "CC=clang" >> $GITHUB_ENV
-          echo "CXX=clang++" >> $GITHUB_ENV
-          clang --version
-          clang++ --version
-
       - name: Find Visual C++ compilers and make all environment variables global (Windows)
         if: runner.os == 'Windows'
         shell: cmd
