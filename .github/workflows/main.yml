@@ -35,12 +35,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           path: CS2Fixes
 
       - name: Checkout Metamod
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           repository: alliedmodders/metamod-source
           ref: master
@@ -57,29 +57,22 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install git+https://github.com/alliedmodders/ambuild
 
-      - name: Find Visual C++ compilers and make all environment variables global (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          :: See https://github.com/microsoft/vswhere/wiki/Find-VC
-          for /f "usebackq delims=*" %%i in (`vswhere -latest -property installationPath`) do (
-            call "%%i"\Common7\Tools\vsdevcmd.bat -arch=x86 -host_arch=x64
-          )
-
-          :: Loop over all environment variables and make them global.
-          for /f "delims== tokens=1,2" %%a in ('set') do (
-            echo>>"%GITHUB_ENV%" %%a=%%b
-          )
-
       - name: Checkout hl2sdk-cs2
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           repository: alliedmodders/hl2sdk
           ref: cs2
           path: CS2Fixes/sdk
           
+      - name: Checkout hl2sdk-cs2
+        uses: actions/checkout@v4.1.1
+        with:
+          repository: alliedmodders/hl2sdk
+          ref: cs2
+          path: hl2sdk-cs2
+          
       - name: Checkout protobuf-3.21.8
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
           repository: protocolbuffers/protobuf
           ref: 21.x
@@ -94,7 +87,7 @@ jobs:
           ambuild
           
       - name: Uploading package
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3.1.3
         with:
           name: CS2Fixes-${{ matrix.os }}-${{ env.GITHUB_SHA_SHORT }}
           path: CS2Fixes/build/package
