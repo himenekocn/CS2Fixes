@@ -38,7 +38,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: CS2Fixes
-          submodules: recursive
 
       - name: Checkout Metamod
         uses: actions/checkout@v4
@@ -57,6 +56,13 @@ jobs:
       - name: Install AMBuild
         run: |
           cd ambuild && python setup.py install && cd ..
+
+      - name: Checkout hl2sdk-cs2
+        uses: actions/checkout@v4
+        with:
+          repository: alliedmodders/hl2sdk
+          ref: cs2
+          path: sdk
 
       - name: Build
         working-directory: CS2Fixes
