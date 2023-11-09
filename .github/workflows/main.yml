@@ -92,6 +92,13 @@ jobs:
           repository: alliedmodders/hl2sdk
           ref: cs2
           path: CS2Fixes/sdk
+          
+      - name: Checkout protobuf-3.21.8
+        uses: actions/checkout@v4
+        with:
+          repository: protocolbuffers/protobuf
+          ref: dab4d24d44
+          path: CS2Fixes/vendor/protobuf-3.21.8
 
       - name: Build
         working-directory: CS2Fixes
