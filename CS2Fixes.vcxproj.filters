@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Source Files">
@@ -80,9 +80,6 @@
     <ClCompile Include="src\gameconfig.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="sdk\entity2\entitysystem.cpp">
-      <Filter>Source Files\sdk</Filter>
-    </ClCompile>
     <ClCompile Include="sdk\tier1\convar.cpp">
       <Filter>Source Files\sdk</Filter>
     </ClCompile>
@@ -93,6 +90,27 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\discord.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\map_votes.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\user_preferences.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="sdk\entity2\entitysystem.cpp">
+      <Filter>Source Files\sdk</Filter>
+    </ClCompile>
+    <ClCompile Include="sdk\entity2\entityidentity.cpp">
+      <Filter>Source Files\sdk</Filter>
+    </ClCompile>
+    <ClCompile Include="src\gamesystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\zombiereborn.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\entitylistener.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -178,6 +196,9 @@
     <ClInclude Include="src\votemanager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\zombiereborn.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\cs2_sdk\entity\globaltypes.h">
       <Filter>Header Files\cs2_sdk\entity</Filter>
     </ClInclude>
@@ -191,6 +212,21 @@
       <Filter>Header Files\cs2_sdk\entity</Filter>
     </ClInclude>
     <ClInclude Include="src\discord.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gamesystem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\gameconfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\map_votes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\user_preferences.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\entitylistener.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

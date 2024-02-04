@@ -24,6 +24,10 @@
 #include <playerslot.h>
 #include "bitvec.h"
 
+#define DECAL_PREF_KEY_NAME "hide_decals"
+#define HIDE_DISTANCE_PREF_KEY_NAME "hide_distance"
+#define SOUND_STATUS_PREF_KEY_NAME "sound_status"
+
 enum class ETargetType {
 	NONE,
 	PLAYER,
@@ -53,10 +57,14 @@ public:
 		m_iTotalKills = 0;
 		m_bVotedRTV = false;
 		m_bVotedExtend = false;
+		m_bIsInfected = false;
 		m_flRTVVoteTime = 0;
 		m_flExtendVoteTime = 0;
 		m_iFloodTokens = 0;
 		m_flLastTalkTime = 0;
+		m_bInGame = false;
+		m_iMZImmunity = 0; // out of 100
+		m_flNominateTime = -60.0f;
 	}
 
 	bool IsFakeClient() { return m_bFakeClient; }
@@ -80,19 +88,24 @@ public:
 	void SetGagged(bool gagged) { m_bGagged = gagged; }
 	void SetTransmit(int index, bool shouldTransmit) { shouldTransmit ? m_shouldTransmit.Set(index) : m_shouldTransmit.Clear(index); }
 	void ClearTransmit() { m_shouldTransmit.ClearAll(); }
-	void SetHideDistance(int distance) { m_iHideDistance = distance; }
+	void SetHideDistance(int distance);
 	void SetTotalDamage(int damage) { m_iTotalDamage = damage; }
 	void SetTotalHits(int hits) { m_iTotalHits = hits; }
 	void SetTotalKills(int kills) { m_iTotalKills = kills; }
 	void SetRTVVote(bool bRTVVote) { m_bVotedRTV = bRTVVote; }
 	void SetRTVVoteTime(float flCurtime) { m_flRTVVoteTime = flCurtime; }
 	void SetExtendVote(bool bExtendVote) { m_bVotedExtend = bExtendVote; }
+	void SetInfectState(bool bInfectState) { m_bIsInfected = bInfectState; }
 	void SetExtendVoteTime(float flCurtime) { m_flExtendVoteTime = flCurtime; }
+	void SetIpAddress(std::string strIp) { m_strIp = strIp; }
+	void SetInGame(bool bInGame) { m_bInGame = bInGame; }
+	void SetImmunity(int iMZImmunity) { m_iMZImmunity = iMZImmunity; }
+	void SetNominateTime(float flCurtime) { m_flNominateTime = flCurtime; }
 
 	bool IsMuted() { return m_bMuted; }
 	bool IsGagged() { return m_bGagged; }
 	bool ShouldBlockTransmit(int index) { return m_shouldTransmit.Get(index); }
-	int GetHideDistance() { return m_iHideDistance; }
+	int GetHideDistance();
 	CPlayerSlot GetPlayerSlot() { return m_slot; }
 	int GetTotalDamage() { return m_iTotalDamage; }
 	int GetTotalHits() { return m_iTotalHits; }
@@ -100,7 +113,12 @@ public:
 	bool GetRTVVote() { return m_bVotedRTV; }
 	float GetRTVVoteTime() { return m_flRTVVoteTime; }
 	bool GetExtendVote() { return m_bVotedExtend; }
+	bool IsInfected() { return m_bIsInfected; }
 	float GetExtendVoteTime() { return m_flExtendVoteTime; }
+	const char* GetIpAddress() { return m_strIp.c_str(); }
+	bool IsInGame() { return m_bInGame; }
+	int GetImmunity() { return m_iMZImmunity; }
+	float GetNominateTime() { return m_flNominateTime; }
 	
 	void OnAuthenticated();
 	void CheckAdmin();
@@ -124,9 +142,14 @@ private:
 	bool m_bVotedRTV;
 	float m_flRTVVoteTime;
 	bool m_bVotedExtend;
+	bool m_bIsInfected;
 	float m_flExtendVoteTime;
 	int m_iFloodTokens;
 	float m_flLastTalkTime;
+	std::string m_strIp;
+	bool m_bInGame;
+	int m_iMZImmunity;
+	float m_flNominateTime;
 };
 
 class CPlayerManager
@@ -143,9 +166,10 @@ public:
 			OnLateLoad();
 	}
 
-	bool OnClientConnected(CPlayerSlot slot, uint64 xuid);
+	bool OnClientConnected(CPlayerSlot slot, uint64 xuid, const char* pszNetworkID);
 	void OnClientDisconnect(CPlayerSlot slot);
 	void OnBotConnected(CPlayerSlot slot);
+	void OnClientPutInServer(CPlayerSlot slot);
 	void OnLateLoad();
 	void TryAuthenticate();
 	void CheckInfractions();

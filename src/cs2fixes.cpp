@@ -38,6 +38,7 @@
 #include "plat.h"
 #include "entitysystem.h"
 #include "engine/igameeventsystem.h"
+#include "gamesystem.h"
 #include "ctimer.h"
 #include "playermanager.h"
 #include <entity.h>
@@ -46,9 +47,14 @@
 #include "eventlistener.h"
 #include "gameconfig.h"
 #include "votemanager.h"
+#include "zombiereborn.h"
 #include "httpmanager.h"
 #include "discord.h"
+#include "map_votes.h"
+#include "user_preferences.h"
 #include "entity/cgamerules.h"
+#include "entity/ccsplayercontroller.h"
+#include "entitylistener.h"
 
 #define VPROF_ENABLED
 #include "tier0/vprof.h"
@@ -113,7 +119,8 @@ CS2Fixes g_CS2Fixes;
 IGameEventSystem *g_gameEventSystem = nullptr;
 IGameEventManager2 *g_gameEventManager = nullptr;
 INetworkGameServer *g_pNetworkGameServer = nullptr;
-CEntitySystem *g_pEntitySystem = nullptr;
+CGameEntitySystem *g_pEntitySystem = nullptr;
+CEntityListener *g_pEntityListener = nullptr;
 CSchemaSystem *g_pSchemaSystem2 = nullptr;
 CGlobalVars *gpGlobals = nullptr;
 CPlayerManager *g_playerManager = nullptr;
@@ -123,7 +130,7 @@ ISteamHTTP *g_http = nullptr;
 CSteamGameServerAPIContext g_steamAPI;
 CCSGameRules *g_pGameRules = nullptr;
 
-CEntitySystem *GetEntitySystem()
+CGameEntitySystem *GameEntitySystem()
 {
 	static int offset = g_GameConfig->GetOffset("GameEntitySystem");
 	return *reinterpret_cast<CGameEntitySystem **>((uintptr_t)(g_pGameResourceServiceServer) + offset);
@@ -196,7 +203,7 @@ bool CS2Fixes::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 	if (!InitDetours(g_GameConfig))
 		bRequiredInitLoaded = false;
 
-	static int offset = g_GameConfig->GetOffset("GameEventManager");
+	int offset = g_GameConfig->GetOffset("GameEventManager");
 	g_gameEventManager = (IGameEventManager2 *)(CALL_VIRTUAL(uintptr_t, offset, g_pSource2Server) - 8);
 
 	if (!g_gameEventManager)
@@ -204,6 +211,9 @@ bool CS2Fixes::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 		Panic("Failed to find GameEventManager\n");
 		bRequiredInitLoaded = false;
 	}
+
+	if (!InitGameSystems())
+		bRequiredInitLoaded = false;
 
 	if (!bRequiredInitLoaded)
 	{
@@ -215,20 +225,26 @@ bool CS2Fixes::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 
 	UnlockConVars();
 	UnlockConCommands();
-
-	if (late)
-	{
-		RegisterEventListeners();
-		g_pEntitySystem = GetEntitySystem();
-		g_pNetworkGameServer = g_pNetworkServerService->GetIGameServer();
-		gpGlobals = g_pNetworkGameServer->GetGlobals();
-	}
-
 	ConVar_Register(FCVAR_RELEASE | FCVAR_CLIENT_CAN_EXECUTE | FCVAR_GAMEDLL);
 
 	g_pAdminSystem = new CAdminSystem();
 	g_playerManager = new CPlayerManager(late);
 	g_pDiscordBotManager = new CDiscordBotManager();
+	g_pZRPlayerClassManager = new CZRPlayerClassManager();
+	g_pMapVoteSystem = new CMapVoteSystem();
+	g_pUserPreferencesSystem = new CUserPreferencesSystem();
+	g_pUserPreferencesStorage = new CUserPreferencesREST();
+	g_pZRWeaponConfig = new ZRWeaponConfig();
+	g_pEntityListener = new CEntityListener();
+
+	if (late)
+	{
+		RegisterEventListeners();
+		g_pEntitySystem = GameEntitySystem();
+		g_pEntitySystem->AddListenerEntity(g_pEntityListener);
+		g_pNetworkGameServer = g_pNetworkServerService->GetIGameServer();
+		gpGlobals = g_pNetworkGameServer->GetGlobals();
+	}
 
 	RegisterWeaponCommands();
 
@@ -296,6 +312,21 @@ bool CS2Fixes::Unload(char *error, size_t maxlen)
 
 	if (g_GameConfig)
 		delete g_GameConfig;
+
+	if (g_pZRPlayerClassManager)
+		delete g_pZRPlayerClassManager;
+
+	if (g_pZRWeaponConfig)
+		delete g_pZRWeaponConfig;
+
+	if (g_pUserPreferencesSystem)
+		delete g_pUserPreferencesSystem;
+
+	if (g_pUserPreferencesStorage)
+		delete g_pUserPreferencesStorage;
+
+	if (g_pEntityListener)
+		delete g_pEntityListener;
 
 	return true;
 }
@@ -384,13 +415,19 @@ void CS2Fixes::Hook_DispatchConCommand(ConCommandHandle cmdHandle, const CComman
 void CS2Fixes::Hook_StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession*, const char*)
 {
 	g_pNetworkGameServer = g_pNetworkServerService->GetIGameServer();
-	g_pEntitySystem = GetEntitySystem();
+	g_pEntitySystem = GameEntitySystem();
+	g_pEntitySystem->AddListenerEntity(g_pEntityListener);
 	gpGlobals = g_pNetworkGameServer->GetGlobals();
 
 	Message("Hook_StartupServer: %s\n", gpGlobals->mapname);
 
 	// run our cfg
 	g_pEngineServer2->ServerCommand("exec cs2fixes/cs2fixes");
+
+	// Run map cfg (if present)
+	char cmd[MAX_PATH];
+	V_snprintf(cmd, sizeof(cmd), "exec cs2fixes/maps/%s", gpGlobals->mapname);
+	g_pEngineServer2->ServerCommand(cmd);
 
 	if(g_bHasTicked)
 		RemoveMapTimers();
@@ -414,8 +451,8 @@ void CS2Fixes::Hook_StartupServer(const GameSessionConfiguration_t& config, ISou
 		return -1.0f;
 	});
 
-	// Set amount of Extends left
-	g_iExtendsLeft = 1;
+	if (g_bEnableZR)
+		ZR_OnStartupServer();
 }
 
 void CS2Fixes::Hook_GameServerSteamAPIActivated()
@@ -497,9 +534,17 @@ void CS2Fixes::Hook_ClientActive( CPlayerSlot slot, bool bLoadGame, const char *
 
 void CS2Fixes::Hook_ClientCommand( CPlayerSlot slot, const CCommand &args )
 {
+	if ((V_stricmp(args[0], "endmatch_votenextmap") == 0) && args.ArgC() == 2) {
+		g_pMapVoteSystem->RegisterPlayerVote(slot, atoi(args[1]));
+	}
 #ifdef _DEBUG
 	Message( "Hook_ClientCommand(%d, \"%s\")\n", slot, args.GetCommandString() );
 #endif
+	if (g_bEnableZR && slot != -1 && !V_strncmp(args.Arg(0), "jointeam", 8))
+	{
+		ZR_Hook_ClientCommand_JoinTeam(slot, args);
+		RETURN_META(MRES_SUPERCEDE);
+	}
 }
 
 void CS2Fixes::Hook_ClientSettingsChanged( CPlayerSlot slot )
@@ -521,7 +566,7 @@ bool CS2Fixes::Hook_ClientConnect( CPlayerSlot slot, const char *pszName, uint64
 {
 	Message( "Hook_ClientConnect(%d, \"%s\", %lli, \"%s\", %d, \"%s\")\n", slot, pszName, xuid, pszNetworkID, unk1, pRejectReason->ToGrowable()->Get() );
 		
-	if (!g_playerManager->OnClientConnected(slot, xuid))
+	if (!g_playerManager->OnClientConnected(slot, xuid, pszNetworkID))
 		RETURN_META_VALUE(MRES_SUPERCEDE, false);
 
 	RETURN_META_VALUE(MRES_IGNORED, true);
@@ -530,6 +575,10 @@ bool CS2Fixes::Hook_ClientConnect( CPlayerSlot slot, const char *pszName, uint64
 void CS2Fixes::Hook_ClientPutInServer( CPlayerSlot slot, char const *pszName, int type, uint64 xuid )
 {
 	Message( "Hook_ClientPutInServer(%d, \"%s\", %d, %d, %lli)\n", slot, pszName, type, xuid );
+	g_playerManager->OnClientPutInServer(slot);
+
+	if (g_bEnableZR)
+		ZR_Hook_ClientPutInServer(slot, pszName, type, xuid);
 }
 
 void CS2Fixes::Hook_ClientDisconnect( CPlayerSlot slot, ENetworkDisconnectionReason reason, const char *pszName, uint64 xuid, const char *pszNetworkID )
@@ -585,6 +634,9 @@ void CS2Fixes::Hook_GameFrame( bool simulating, bool bFirstTick, bool bLastTick 
 			}
 		}
 	}
+
+	if (g_bEnableZR)
+		CZRRegenTimer::Tick();
 
 	VPROF_EXIT_SCOPE();
 }
@@ -647,6 +699,8 @@ void CS2Fixes::OnLevelInit( char const *pMapName,
 									 bool background )
 {
 	Message("OnLevelInit(%s)\n", pMapName);
+
+	g_pMapVoteSystem->OnLevelInit(pMapName);
 }
 
 // Potentially might not work
@@ -672,7 +726,7 @@ const char *CS2Fixes::GetLicense()
 
 const char *CS2Fixes::GetVersion()
 {
-	return "1.2";
+	return "1.3";
 }
 
 const char *CS2Fixes::GetDate()
